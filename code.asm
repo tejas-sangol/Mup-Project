@@ -78,7 +78,9 @@ item_nos db 0
                call initialize_8259
          
 		    call display_system_ready
-		    
+		    lea si,dummy
+		    mov [si],07fh
+		    call display_char
 		  
 		    get_mode:  
 		    
@@ -221,7 +223,7 @@ initialize_LCD proc
 		 out 02,al 
 		 
 		 
-		 mov al,0fh
+		 mov al,0eh
 		 out 00,al  
 		  
 		  mov al,00000000b
@@ -276,7 +278,7 @@ initialize_LCD_opp proc
 		 out 02,al 
 		 
 		 
-		 mov al,0fh
+		 mov al,0eh
 		 out 00,al  
 		  
 		  mov al,00000000b
@@ -510,16 +512,9 @@ get_input proc   ; bx will have the index of the number in the decode_table
     lea si,decode_table
     mov bl,0  
     
-    cnt:
-    cmp word ptr[si],dx
-    jz x100 
     
-    add si,2
-    inc bl 
-     
-    jmp cnt
 
-    x100: 
+    
          
     ret
     
@@ -840,7 +835,7 @@ backspace proc
     lea di,last_string_count 
     
     cmp [di],0
-    jle return 
+    je return 
     
     dec si
     mov [si],0
@@ -849,7 +844,7 @@ backspace proc
     mov al,01h
     out 02h,al
     
-    mov al,18h
+    mov al,10h
     out 00h,al
     
     mov al,00h
@@ -859,8 +854,9 @@ backspace proc
     
     mov di,si        ;;Hold si value in order to resrore it before return from the method
     
-    
+    dec last_string_count
     lea si, dummy
+    
     mov [si],' '
     call display_char
     
@@ -868,7 +864,7 @@ backspace proc
     mov al,01h
     out 02h,al
     
-    mov al,1eh
+    mov al,10h
     out 00h,al
     
     mov al,00h
@@ -884,20 +880,28 @@ input_item_number proc
     lea si,last_string   
     
     mov last_string_count,0
+    
     inp:
     
     
     call get_input 
     
+    
     check_item_no_backspace:
         cmp dx,0bf40h
         jnz  take
-    
+        
+        
+        
         call backspace 
+        
+        
+    
+        jmp inp 
         
     take:  
     cmp dx,0ddc0h
-    jl inp
+    jb inp
     
     lea di,decode_table
     mov cl,0
@@ -923,8 +927,8 @@ input_item_number proc
        
         inc si   
         
-    cmp last_string_count,6
-    jl inp
+    cmp last_string_count,8
+    jb inp
     
     look_for_enter:
         call get_input
