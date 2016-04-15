@@ -40,15 +40,20 @@ select_mode 	db "SELECT MODE", '$'
 spaces          db "                ",'$'
 transact_confirm db "ENTER TRANSACTION MODE Y/N ?" ,'$'  
 decode_table dw 0ef80h,0ef40h,0eec0h,0edc0h,0ebc0h,0e7c0h,0df80h,0df40h,0dec0h,0ddc0h,0dbc0h,0d7c0h,0bf80h,0bf40h,0bec0h,0bdc0h,0bbc0h,0b7c0h,07f80h,07f40h,07ec0h,07dc0h,07bc0h,077c0h
- dummy db 0
-
-
+ dummy dw 0
+ mul_factor dw 0  
+ dummy2 dw 0
+ price_if_equal dw 0 
+ ddd db 0
+ aldummy db 0
+ 
+ total_transaction dw 2 dup(0)
+ 
 last_string db 20 dup(0),'$'
 last_string_count dw 0
 
 number_of_items dw 0
-item_cost dw 100 dup(0)
-item_nos db 0 
+item_code db 0
 
 ; intialize ds, es,ss to start of RAM
           mov       ax,0200h
@@ -69,18 +74,16 @@ item_nos db 0
 		    
 		 repeat_till_off: 
 		 
-		     
+		       mov ax,0           ;clearing
 		 
-		     call initialize_LCD
-		                      
+		     call initialize_LCD 
+		       
 		      call initialize_8255_2                 
                
                call initialize_8259
          
 		    call display_system_ready
-		    lea si,dummy
-		    mov [si],07fh
-		    call display_char
+		    
 		  
 		    get_mode:  
 		    
@@ -93,7 +96,12 @@ item_nos db 0
 		    
 		    mode:
 		    
-		    
+		     push si
+		     lea si,ddd
+		     mov [si],'a'
+		     call display_char
+		     
+		     pop si
              call initialize_LCD 
 		    call display_select_mode
             trans_program:
@@ -122,12 +130,12 @@ item_nos db 0
 	         
 	            cmp dx,0dbc0h
                 
-                jg transact
+                ja transact
                 
             
                 cmp dx,0d7c0h
                 
-                jl transact
+                jb transact
                 je mode
                 
                 call transaction
@@ -140,7 +148,7 @@ item_nos db 0
 	        jmp mode
 		 
 		 
-		 jmp repeat_till_off
+		 
 
  cancel_key:
             call clear_display
@@ -158,7 +166,7 @@ item_nos db 0
 
           
 delay_40us proc
-
+          push ax
   
          mov       al,00110001b
 		  out       0Eh,al
@@ -173,14 +181,15 @@ delay_40us proc
 		  
 		  in al, 04h
 		  and al,80h
-		  jz x2
+		  jz x2 
+		  pop ax
 		  ret
 
 endp 
 
 
 delay_30ms proc
-    
+      push ax
     mov       al,00110001b
 		  out       0Eh,al
 		  mov       al,00h
@@ -197,7 +206,7 @@ delay_30ms proc
 		  jz x300
     
     
-    
+           pop ax
     
     ret
     
@@ -208,7 +217,7 @@ endp
 
 initialize_LCD proc    
     
-    
+    push ax             ;store original ax
     mov al,00000001b
 		 out 02,al
 		     
@@ -253,7 +262,7 @@ initialize_LCD proc
 		              
 		 
 
-
+       pop ax     ;store original ax
 	ret
 
 endp  
@@ -263,7 +272,7 @@ endp
 
 initialize_LCD_opp proc    
     
-    
+    push ax     ;store ax
     mov al,00000001b
 		 out 02,al
 		     
@@ -307,7 +316,7 @@ initialize_LCD_opp proc
 		 call delay_30ms 
 		              
 		 
-
+          pop ax      ;store ax
 
 	ret
 
@@ -315,7 +324,7 @@ endp
 display_char proc
     
     
-    
+    push ax
     mov al,00000101b
     out 02,al
     call delay_30ms
@@ -325,7 +334,8 @@ display_char proc
     call delay_30ms
     
     mov al,00000100b
-    out 02,al
+    out 02,al 
+    pop ax
     ret
     
     
@@ -333,7 +343,8 @@ display_char proc
 endp
 
 initialize_8259 proc
-	
+	 
+	push ax 
 	mov al,13h  ; ICW1
 	out 10h,al
 
@@ -347,16 +358,17 @@ initialize_8259 proc
 	mov al, 0feh	;OCW1 Only interrupt-0 is unmasked 
 	out 12h,al
     sti
+    pop ax
 	ret
 endp
 
 initialize_8255_2 proc
-
+     push ax
 	mov al,10001001b
 	out 1eh,al
 
 	
-	
+	  pop ax
 	ret
 
 endp
@@ -364,7 +376,7 @@ endp
 
 clear_display proc
      
-     
+     ;push ax              ;;dummying
      call delay_30ms   
      
          mov al,01h
@@ -377,7 +389,8 @@ clear_display proc
          out 02,al  
          
          
-     call delay_30ms
+     call delay_30ms 
+     ;pop ax
 	ret
 
 endp  
@@ -407,7 +420,12 @@ endp
 
 
 get_input proc   ; bx will have the index of the number in the decode_table
-              
+    
+    push ax
+    push bx
+    push cx
+    push si
+                
     mov al,00h
     out 18h,al
        
@@ -509,11 +527,13 @@ get_input proc   ; bx will have the index of the number in the decode_table
     ror cl,1
     and cl,0f0h
     mov dl,cl
-    lea si,decode_table
-    mov bl,0  
+    ;lea si,decode_table
+    ;mov bl,0  
     
-    
-
+    pop si
+    pop cx
+    pop bx
+    pop ax
     
          
     ret
@@ -522,7 +542,8 @@ get_input proc   ; bx will have the index of the number in the decode_table
 endp  
 
 display_select_mode proc
-    
+      
+      push si
      call clear_display 
       
     call delay_30ms
@@ -534,6 +555,18 @@ display_select_mode proc
     cmp [si],'$'
     jnz sel_mode
     
+    push ax                ;;test
+    push si
+    mov ax,number_of_items
+    lea si,ddd
+    mov [si],al
+    add [si],'0'
+    call display_char
+    
+    pop si
+    pop ax    
+    
+    pop si
     ret
     
 endp
@@ -615,6 +648,9 @@ initialize_data proc
     mov [si+10],'E'
     
      mov [si+11],'$'
+     
+     
+     
      
      lea si,transact_confirm
 
@@ -755,6 +791,25 @@ initialize_data proc
     mov [si+46],077c0h
 
     
+    
+    lea si,last_string_count 
+    mov word ptr[si],0
+    
+    lea si,number_of_items 
+    mov word ptr[si],0 
+    
+    lea si,dummy 
+    mov word ptr[si],0 
+    
+    lea si,dummy2 
+    mov word ptr[si],0  
+    
+    lea si,total_transaction 
+    mov word ptr[si],0              
+    
+    lea si,mul_factor 
+    mov word ptr[si],0 
+    
     ret
     
     
@@ -763,7 +818,10 @@ endp
 
 
 display_transact_confirm proc
-    call clear_display   
+    
+    push ax
+    call clear_display
+       
     
     mov al,01h
     out 02,al
@@ -792,38 +850,220 @@ display_transact_confirm proc
         
         cmp [si],'$'
         jnz trans
-       
+   pop ax
+        
     ret
 endp
 
 
 transaction proc
-  
-  
+  push ax
+  push si
+  lea si,total_transaction
+  mov word ptr[si],0
+  mov word ptr[si+2],0
   look_for_item_no_key: 
   
+    call clear_display
+    
+    
+   total_or_itemno:
    
     call get_input
+    cmp dx,0b7c0h
+    
+    jz show_total
+    
+    
     cmp dx,0bdc0h
     
     jnz look_for_item_no_key
     
-    call clear_display
+    
     
     call initialize_LCD
     
     call input_item_number
     
+    call check_for_item_number  ;;bp will have address of itemNO + 8,
     
+    cmp ax,0
+    jz total_or_itemno
+     
+    call clear_display                         
+    
+    mov bx,price_if_equal
+    
+    press_quantity:
+    
+    call get_input
+    cmp dx,0bec0h 
+    jnz press_quantity
+    
+    call get_price_or_quantity   ;last_string has quantity in string form
+    
+    call convert_string_to_number  ;convert to a 16-bit unsigned integer in ax
+    
+    call  add_to_total
+    
+    jmp total_or_itemno
+        
+    show_total:
+    
+    call convert_number_to_string 
+    
+    lea di,last_string 
+
+    lea si,last_string
+    add si,last_string_count
+    cmp si,0
+    jz display_0
+    
+    
+    
+    print_total:  
+        dec si
+       call display_char
+    
+        
+        cmp di,si
+        
+        jnz print_total
+        jz return6
+    
+    display_0:
+    
+    lea si,last_string
+    mov [si],'0'
+    call display_char
+    
+    
+    return6: pop si
+    pop ax
     ret
     
 endp 
 
 
 program proc
+    push ax
+    push si
+    inp3:
+    
+    call get_input
+    
+    cmp dx,07bc0h
+    jz delete
     
     
     
+    cmp dx,07dc0h
+    jnz inp3
+    
+    call clear_display
+    
+    press_item_no:
+    
+        call get_input
+        cmp dx,0bdc0h
+        jnz press_item_no
+        
+        call  input_item_number
+        
+        
+        call clear_display
+        
+        
+        
+        call check_for_item_number  
+        
+        
+        
+        
+         
+        cmp ax,0
+        jz add_new
+        
+        call delete_item
+        sub di,10 
+        
+        add_new:
+        mov cx,8
+        lea si,last_string 
+        addd:
+          mov bx,[si]
+          mov [di],bx
+          inc si
+          inc di
+          dec cx
+          jnz addd
+         
+         
+        mov dummy2,di  
+        
+        check_cost:
+        call get_input
+        cmp dx,077c0h
+        
+        jnz check_cost
+        
+        call clear_display
+         
+        call get_price_or_quantity
+        
+        push si
+        
+        lea si,ddd
+        mov [si],'s'
+        call display_char
+        pop si
+        
+        call convert_string_to_number 
+        push si
+        
+        lea si,ddd
+        mov [si],'s'
+        call display_char
+        pop si
+        
+        mov di,dummy2
+        
+        mov word ptr[di],ax
+        
+        inc number_of_items
+        
+       
+       jmp return5
+       
+       
+       
+    
+    delete:
+      press_item_no2:
+        
+        call clear_display
+        
+        call get_input 
+        
+        cmp dx,0bdc0h
+        
+        jnz press_item_no2
+        
+        call  input_item_number
+        
+        
+        
+        call clear_display
+        
+        call check_for_item_number 
+        cmp ax,0
+        jz return5
+        
+        call delete_item
+        
+    
+    return5: pop si
+    pop ax
     ret
     
 endp
@@ -831,7 +1071,7 @@ endp
 
 
 backspace proc
-    
+    push ax
     lea di,last_string_count 
     
     cmp [di],0
@@ -872,7 +1112,9 @@ backspace proc
     
     mov si,di
         
-    return: ret
+    return:
+    pop ax
+     ret
 endp 
 
 input_item_number proc
@@ -918,16 +1160,19 @@ input_item_number proc
         
     print_last_string: 
     
-        add cl,'0'
+        add cl,'0' 
+        
+        
         mov [si],cl
      
         call display_char
+        
      
         inc last_string_count
        
         inc si   
         
-    cmp last_string_count,8
+    cmp last_string_count,2
     jb inp
     
     look_for_enter:
@@ -942,9 +1187,249 @@ input_item_number proc
 endp
 
 
-convert_string_to_number proc   ;Convert a string to number with length in CX
+convert_string_to_number proc   ;Convert a string to number with length in last_string_count
+    push ax
+    push bx
+    push cx
+    mov bx,0
+    
+    lea di,last_string
+    
+    mov ax,0 
+    mov cx,10
+    partial_multiply:
+        mul cx 
+        sub byte ptr [di+bx],'0'
+        add ax,[di+bx] 
+        
+        inc bx
+        cmp bx,last_string_count
+        jnz partial_multiply
+    
+    
+    pop cx
+    pop bx
+    pop ax        
+    ret
+    
+endp  
+
+
+
+check_for_item_number proc ;Find an item whos no is in the last_sting
+    
+    lea di,item_code  
+    mov price_if_equal,0 
+    mov bp,di
+    
+    
+    lea si,last_string
+    mov ax, number_of_items 
     
      
+    cmp ax,0
+    jz here
+    
+    mov cx,last_string_count
+    check_for_item:
+          mov bx,[si]  
+          cmp [bp+0],bx
+          jnz not_equal
+          inc bp
+           
+          inc si
+          dec cx
+          jz equal
+          jmp check_for_item
+        
+    
+     not_equal:
+     
+      add di,10 
+     mov bp,di 
+     lea si,last_string
+     mov cx,last_string_count
+     dec ax
+     jnz check_for_item
+     
+     
+      equal:
+     lea si,price_if_equal 
+     mov cx,  word ptr[bp+0]
+     mov [si], cx
+      
+     
+    here: 
+    ret
+endp  
+
+
+add_to_total proc   ;total_transaction +=  ax*bx
+    
+    lea di,total_transaction
+    
+    mul bx
+    
+    
+    add [di],dx
+    add [di+2],ax
+    ret
+    
+endp
+
+
+
+get_price_or_quantity proc
+    
+    push cx
+    push si
+    lea si,last_string
+    mov last_string_count,0
+    inp2:
+    
+    call get_input
+    
+    cmp dx,0bf40h
+    jnz check_for_enter
+    
+    call backspace
+    
+    jmp inp2
+    
+    check_for_enter:  
+    
+    cmp dx,0bf80h
+    jz return3
+    
+    cmp dx,0ddc0h
+    jb inp2
+    
+    lea di,decode_table
+    mov cl,0
+    
+    check3: 
+    
+        cmp dx,[di]
+        jz print_last_string2
+        
+        inc cl
+        add di,2        
+        
+        jmp check3
+        
+    print_last_string2: 
+    
+        add cl,'0'
+        mov [si],cl
+     
+        call display_char
+     
+        inc last_string_count
+       
+        inc si 
+        
+     jmp inp2
+     
+           
+    return3:pop si
+    pop cx 
+    ret
+endp 
+
+
+
+delete_item proc 
+    
+    push bx
+    push cx
+    push dx
+    push di
+    push bp
+    sub bp,8   ;bp has the address after it is checked equal
+    mov ax,number_of_items
+    dec ax
+    mov cx,10
+    mul cx
+    lea di,item_code
+    add di,ax
+    mov cx,10
+    
+    swap:
+      mov bx,[di]
+      mov [bp],bx
+      inc bp
+      inc di
+      dec cx
+      jnz swap
+      
+    dec number_of_items
+    
+    return4: pop bp
+    pop di
+    pop dx
+    pop cx
+    pop bx
+    ret
+    
+endp
+
+
+
+
+convert_number_to_string proc
+    push cx
+    push si
+    lea si,last_string
+    mov last_string_count,0
+    
+    
+    mov cx,10  
+    partial_divide:
+    div cx
+    mov [si],dx
+    add [si],'0'
+    inc si
+    inc last_string_count
+    cmp ax,0
+    ja partial_divide 
+    pop si
+    pop cx
+    ret
+endp 
+
+
+show_last_string proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push bp
+   
+   
+   lea si,last_string
+   mov cx,0
+   
+   call clear_display
+   
+   pr:
+   
+   call display_char
+   inc si
+   inc cx
+   cmp cx,last_string_count
+   jnz pr
+    
+    
+    
+    push bp
+    push di
+    push si
+    push dx
+    push cx
+    push bx
+    push ax
     ret
     
 endp
