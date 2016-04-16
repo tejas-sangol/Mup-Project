@@ -96,12 +96,7 @@ item_code db 0
 		    
 		    mode:
 		    
-		     push si
-		     lea si,ddd
-		     mov [si],'a'
-		     call display_char
 		     
-		     pop si
              call initialize_LCD 
 		    call display_select_mode
             trans_program:
@@ -877,15 +872,20 @@ transaction proc
     
     cmp dx,0bdc0h
     
-    jnz look_for_item_no_key
+    jnz total_or_itemno
     
     
     
     call initialize_LCD
     
     call input_item_number
-    
+    ;call clear_display
     call check_for_item_number  ;;bp will have address of itemNO + 8,
+      
+    
+    
+    
+    
     
     cmp ax,0
     jz total_or_itemno
@@ -900,22 +900,60 @@ transaction proc
     cmp dx,0bec0h 
     jnz press_quantity
     
-    call get_price_or_quantity   ;last_string has quantity in string form
+    push si           ;test
+    lea si,ddd 
+    mov [si],'v'
+    call display_char
+    pop si
+    call get_price_or_quantity   ;last_string has quantity in string form  
+    push si
     
-    call convert_string_to_number  ;convert to a 16-bit unsigned integer in ax
+    lea si,ddd 
+     
+     mov [si],'v'
+    
+    call display_char
+    
+    pop si
+    
+    call convert_string_to_number  ;convert to a 16-bit unsigned integer in ax 
+    push si           ;test
+    lea si,ddd 
+    mov [si],'v'
+    call display_char
+    pop si
     
     call  add_to_total
+    push si           ;test
+    lea si,ddd 
+    mov [si],'v'
+    call display_char
+    pop si
     
     jmp total_or_itemno
         
     show_total:
-    
-    call convert_number_to_string 
-    
-    lea di,last_string 
+    push si           ;test
+    lea si,ddd 
+    mov [si],'v'
+    call display_char
+    pop si
+    call convert_number_to_string
+    call show_last_string
+     
+    push si
+    push bx
+    lea si,ddd 
+     mov bx,last_string_count
+     mov [si],bl
+    add [si],'a'
+    call display_char
+    pop bx
+    pop si
+    ;lea di,last_string 
 
-    lea si,last_string
-    add si,last_string_count
+    ;lea si,last_string
+    ;add si,last_string_count
     cmp si,0
     jz display_0
     
@@ -1011,20 +1049,8 @@ program proc
          
         call get_price_or_quantity
         
-        push si
-        
-        lea si,ddd
-        mov [si],'s'
-        call display_char
-        pop si
         
         call convert_string_to_number 
-        push si
-        
-        lea si,ddd
-        mov [si],'s'
-        call display_char
-        pop si
         
         mov di,dummy2
         
@@ -1118,7 +1144,7 @@ backspace proc
 endp 
 
 input_item_number proc
-    
+    push dx
     lea si,last_string   
     
     mov last_string_count,0
@@ -1172,7 +1198,7 @@ input_item_number proc
        
         inc si   
         
-    cmp last_string_count,2
+    cmp last_string_count,8
     jb inp
     
     look_for_enter:
@@ -1181,14 +1207,14 @@ input_item_number proc
         cmp dx,0bf80h
         jnz look_for_enter 
     
-      
+       pop dx
     
     ret
 endp
 
 
 convert_string_to_number proc   ;Convert a string to number with length in last_string_count
-    push ax
+    
     push bx
     push cx
     mov bx,0
@@ -1209,7 +1235,7 @@ convert_string_to_number proc   ;Convert a string to number with length in last_
     
     pop cx
     pop bx
-    pop ax        
+            
     ret
     
 endp  
@@ -1217,6 +1243,8 @@ endp
 
 
 check_for_item_number proc ;Find an item whos no is in the last_sting
+    
+   
     
     lea di,item_code  
     mov price_if_equal,0 
@@ -1228,16 +1256,19 @@ check_for_item_number proc ;Find an item whos no is in the last_sting
     
      
     cmp ax,0
-    jz here
+    jz here 
     
-    mov cx,last_string_count
+    
+    
+    
+    mov cx,4
     check_for_item:
           mov bx,[si]  
           cmp [bp+0],bx
           jnz not_equal
-          inc bp
+          add bp,2
            
-          inc si
+          add si,2
           dec cx
           jz equal
           jmp check_for_item
@@ -1248,18 +1279,22 @@ check_for_item_number proc ;Find an item whos no is in the last_sting
       add di,10 
      mov bp,di 
      lea si,last_string
-     mov cx,last_string_count
+     mov cx,4
      dec ax
      jnz check_for_item
+     jmp here
      
-     
-      equal:
+      equal: 
+      
      lea si,price_if_equal 
      mov cx,  word ptr[bp+0]
      mov [si], cx
       
      
-    here: 
+    here:  
+    
+    
+    
     ret
 endp  
 
@@ -1287,6 +1322,8 @@ get_price_or_quantity proc
     mov last_string_count,0
     inp2:
     
+   
+   
     call get_input
     
     cmp dx,0bf40h
@@ -1433,3 +1470,5 @@ show_last_string proc
     ret
     
 endp
+
+
