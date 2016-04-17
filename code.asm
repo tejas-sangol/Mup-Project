@@ -46,7 +46,7 @@ decode_table dw 0ef80h,0ef40h,0eec0h,0edc0h,0ebc0h,0e7c0h,0df80h,0df40h,0dec0h,0
  price_if_equal dw 0 
  ddd db 0
  aldummy db 0
- 
+ inter_mul dw 2 dup(0)
  total_transaction dw 2 dup(0)
  
 last_string db 20 dup(0),'$'
@@ -133,7 +133,9 @@ item_code db 0
                 jb transact
                 je mode
                 
-                call transaction
+                call transaction 
+                
+               
                 jmp repeat_till_off 
 	        
 	        prog:
@@ -800,10 +802,15 @@ initialize_data proc
     mov word ptr[si],0  
     
     lea si,total_transaction 
-    mov word ptr[si],0              
+    mov word ptr[si],0
+    mov word_ptr[si+2],0              
     
     lea si,mul_factor 
-    mov word ptr[si],0 
+    mov word ptr[si],0  
+    
+    lea si,inter_mul 
+    mov word ptr[si],0
+    mov word_ptr[si+2],0 
     
     ret
     
@@ -863,7 +870,9 @@ transaction proc
     
     
    total_or_itemno:
-   
+    
+    call clear_display
+    
     call get_input
     cmp dx,0b7c0h
     
@@ -900,61 +909,31 @@ transaction proc
     cmp dx,0bec0h 
     jnz press_quantity
     
-    push si           ;test
-    lea si,ddd 
-    mov [si],'v'
-    call display_char
-    pop si
+    
     call get_price_or_quantity   ;last_string has quantity in string form  
-    push si
     
-    lea si,ddd 
-     
-     mov [si],'v'
-    
-    call display_char
-    
-    pop si
     
     call convert_string_to_number  ;convert to a 16-bit unsigned integer in ax 
-    push si           ;test
-    lea si,ddd 
-    mov [si],'v'
-    call display_char
-    pop si
+    
     
     call  add_to_total
-    push si           ;test
-    lea si,ddd 
-    mov [si],'v'
-    call display_char
-    pop si
+    
     
     jmp total_or_itemno
         
     show_total:
-    push si           ;test
-    lea si,ddd 
-    mov [si],'v'
-    call display_char
-    pop si
+    
+    
     call convert_number_to_string
-    call show_last_string
+    ;call show_last_string
      
-    push si
-    push bx
-    lea si,ddd 
-     mov bx,last_string_count
-     mov [si],bl
-    add [si],'a'
-    call display_char
-    pop bx
-    pop si
-    ;lea di,last_string 
+    
+    lea di,last_string 
 
-    ;lea si,last_string
-    ;add si,last_string_count
-    cmp si,0
+    lea si,last_string
+    add si,last_string_count
+    
+    cmp last_string_count,0
     jz display_0
     
     
@@ -976,8 +955,11 @@ transaction proc
     call display_char
     
     
-    return6: pop si
-    pop ax
+    return6: 
+    
+    pop si
+    pop ax 
+    
     ret
     
 endp 
@@ -1026,18 +1008,18 @@ program proc
         sub di,10 
         
         add_new:
-        mov cx,8
+        mov cx,4
         lea si,last_string 
         addd:
           mov bx,[si]
           mov [di],bx
-          inc si
-          inc di
+          add si,2
+          add di,2
           dec cx
           jnz addd
          
          
-        mov dummy2,di  
+        push di  
         
         check_cost:
         call get_input
@@ -1048,11 +1030,11 @@ program proc
         call clear_display
          
         call get_price_or_quantity
-        
+         ;call show_last_string
         
         call convert_string_to_number 
         
-        mov di,dummy2
+        pop di
         
         mov word ptr[di],ax
         
@@ -1217,22 +1199,37 @@ convert_string_to_number proc   ;Convert a string to number with length in last_
     
     push bx
     push cx
-    mov bx,0
+    push bp
+    push dx 
+    push di
     
-    lea di,last_string
-    
-    mov ax,0 
-    mov cx,10
+    mov di,last_string_count
+    lea si,last_string
+    mov bp,10
+    mov ax,0
+    mov cx,0
+    mov dx,0  
     partial_multiply:
-        mul cx 
-        sub byte ptr [di+bx],'0'
-        add ax,[di+bx] 
-        
-        inc bx
-        cmp bx,last_string_count
-        jnz partial_multiply
+    mov al,byte ptr[si]
+     sub al,'0'
     
     
+    mov bl,al
+    mov ax,cx
+    mul bp
+    mov bh,0
+    add ax,bx
+    mov cx,ax
+    inc si
+    dec di
+    jnz partial_multiply
+    
+    mov ax,cx
+    
+     
+    pop di    
+    pop dx
+    pop bp
     pop cx
     pop bx
             
@@ -1305,9 +1302,21 @@ add_to_total proc   ;total_transaction +=  ax*bx
     
     mul bx
     
+    clc
+    adc word ptr[di+ 2],ax
+    add word ptr[di],dx 
     
-    add [di],dx
-    add [di+2],ax
+    push si
+    push bx            ;test
+    lea si,ddd
+    mov [si],'a' 
+    mov bx,  word ptr[di+2]
+    add [si],bl
+    call display_char
+    pop bx
+    pop si  
+    
+    
     ret
     
 endp
@@ -1376,12 +1385,12 @@ endp
 
 
 delete_item proc 
-    
+    push ax
     push bx
     push cx
     push dx
-    push di
-    push bp
+    
+    
     sub bp,8   ;bp has the address after it is checked equal
     mov ax,number_of_items
     dec ax
@@ -1389,23 +1398,24 @@ delete_item proc
     mul cx
     lea di,item_code
     add di,ax
-    mov cx,10
+    mov cx,5
     
     swap:
       mov bx,[di]
       mov [bp],bx
-      inc bp
-      inc di
+      add bp,2
+      add di,2
       dec cx
       jnz swap
       
     dec number_of_items
     
-    return4: pop bp
-    pop di
+    return4: 
+    
     pop dx
     pop cx
-    pop bx
+    pop bx 
+    pop ax
     ret
     
 endp
@@ -1415,9 +1425,41 @@ endp
 
 convert_number_to_string proc
     push cx
-    push si
+    push si 
+    push di
     lea si,last_string
     mov last_string_count,0
+    lea  di , total_transaction 
+    mov dx , word ptr[di]
+    mov ax, word ptr[di+2]
+    
+    push si               ;test
+    lea si,ddd
+    mov [si],'0'
+    add [si],al
+    call display_char
+    pop si 
+    push si
+    lea si,ddd
+    mov [si],'0'
+    add [si],ah
+    call display_char
+    pop si
+    push si
+    lea si,ddd
+    mov [si],'0'
+    add [si],dl
+    call display_char
+    pop si
+    push si
+    lea si,ddd
+    mov [si],'0'
+    add [si],dh
+    call display_char
+    pop si
+    
+    
+    
     
     
     mov cx,10  
@@ -1425,10 +1467,24 @@ convert_number_to_string proc
     div cx
     mov [si],dx
     add [si],'0'
+    
+     
     inc si
     inc last_string_count
     cmp ax,0
     ja partial_divide 
+    
+    ;mov [si],'6'            ;;test values 
+    ;inc si
+    ;mov [si],'2'
+    ;inc si
+    ;mov [si],'3'
+    ;inc si
+    ;mov [si],'4'
+    ;inc si
+    
+    ;mov last_string_count,4
+    pop di
     pop si
     pop cx
     ret
@@ -1450,6 +1506,7 @@ show_last_string proc
    
    call clear_display
    
+   
    pr:
    
    call display_char
@@ -1460,13 +1517,13 @@ show_last_string proc
     
     
     
-    push bp
-    push di
-    push si
-    push dx
-    push cx
-    push bx
-    push ax
+    pop bp
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
     ret
     
 endp
