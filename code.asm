@@ -54,7 +54,7 @@ last_string_count dw 0
 
 number_of_items dw 0
 item_code db 0
-
+              
 ; intialize ds, es,ss to start of RAM
           mov       ax,0200h
           mov       ds,ax
@@ -71,19 +71,23 @@ item_code db 0
 		  mov ah,5
 		 call initialize_data 
 		 
-		    
+		
 		 repeat_till_off: 
 		 
 		       mov ax,0           ;clearing
 		 
 		     call initialize_LCD 
 		       
-		      call initialize_8255_2                 
+		    call initialize_8255_2                 
                
-               call initialize_8259
-         
+               call initialize_8259     
+                                
 		    call display_system_ready
-		    
+		    push si          ;;test
+		    lea si,ddd
+		    mov [si],'a'
+		    call display_char
+		    pop si
 		  
 		    get_mode:  
 		    
@@ -147,16 +151,32 @@ item_code db 0
 		 
 		 
 
- cancel_key:
+ cancel_key: 
+ 
+        lea si,ddd
+        mov [si],'a'
+             mov al,00000101b
+    out 02,al
+    ;call delay_30ms
+    mov al,[si]
+    out 00,al
+    
+    ;call delay_30ms
+    
+    mov al,00000100b
+    out 02,al 
+             
+            
             call clear_display
             
             call delay_30ms
             
             
-            ;;mov al,00100000b
+            
+            ;mov al,00100000b
             ;out 10,al 
  
- 
+            ;mov al,010
  
  iret
  
@@ -396,7 +416,7 @@ endp
 
 display_system_ready proc  
     
-    call clear_display 
+    ;call clear_display 
     
    
     call delay_30ms
@@ -906,7 +926,7 @@ transaction proc
     press_quantity:
     
     call get_input
-    cmp dx,0bec0h 
+    cmp dx,0bbc0h 
     jnz press_quantity
     
     
@@ -956,6 +976,9 @@ transaction proc
     
     
     return6: 
+    call get_input
+    cmp dx,0bf80h
+    jnz return6
     
     pop si
     pop ax 
@@ -1302,9 +1325,9 @@ add_to_total proc   ;total_transaction +=  ax*bx
     
     mul bx
     
-    clc
-    adc word ptr[di+ 2],ax
-    add word ptr[di],dx 
+    
+    add word ptr[di+ 2],ax
+    adc word ptr[di],dx 
     
     push si
     push bx            ;test
@@ -1427,63 +1450,29 @@ convert_number_to_string proc
     push cx
     push si 
     push di
+    
+    lea bp,total_transaction  
     lea si,last_string
     mov last_string_count,0
-    lea  di , total_transaction 
-    mov dx , word ptr[di]
-    mov ax, word ptr[di+2]
+    mov dx,[bp+0]
+    mov ax,[bp+2] 
     
-    push si               ;test
-    lea si,ddd
-    mov [si],'0'
-    add [si],al
-    call display_char
-    pop si 
-    push si
-    lea si,ddd
-    mov [si],'0'
-    add [si],ah
-    call display_char
-    pop si
-    push si
-    lea si,ddd
-    mov [si],'0'
-    add [si],dl
-    call display_char
-    pop si
-    push si
-    lea si,ddd
-    mov [si],'0'
-    add [si],dh
-    call display_char
-    pop si
+
     
-    
-    
-    
-    
-    mov cx,10  
+    mov cx,10
     partial_divide:
-    div cx
+    
+    div cx 
+    
+
     mov [si],dx
     add [si],'0'
-    
-     
     inc si
     inc last_string_count
+    mov dx,0
     cmp ax,0
-    ja partial_divide 
+    jnz partial_divide
     
-    ;mov [si],'6'            ;;test values 
-    ;inc si
-    ;mov [si],'2'
-    ;inc si
-    ;mov [si],'3'
-    ;inc si
-    ;mov [si],'4'
-    ;inc si
-    
-    ;mov last_string_count,4
     pop di
     pop si
     pop cx
