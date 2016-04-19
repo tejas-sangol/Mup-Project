@@ -26,19 +26,21 @@
 
 ; add your code here
          jmp     st1 
-         db     509 dup(0)
+         db 509 dup(0)
 
-         dw     cancel_key
+         dw     lock_isr
          dw     0000
          db     508 dup(0) 
-         st1:      cli 
+         st1:      cli  
 ;main program
 
  
 system_ready 	db 'system ready$'
 select_mode 	db "SELECT MODE", '$'
-spaces          db "                ",'$'
-transact_confirm db "ENTER TRANSACTION MODE Y/N ?" ,'$'  
+confirm_add          db "Confirm add?$" 
+confirm_delete db "Confirm delete?$"
+transact_confirm db "ENTER TRANSACTION MODE Y/N ?" ,'$' 
+ 
 decode_table dw 0ef80h,0ef40h,0eec0h,0edc0h,0ebc0h,0e7c0h,0df80h,0df40h,0dec0h,0ddc0h,0dbc0h,0d7c0h,0bf80h,0bf40h,0bec0h,0bdc0h,0bbc0h,0b7c0h,07f80h,07f40h,07ec0h,07dc0h,07bc0h,077c0h
  dummy dw 0
  mul_factor dw 0  
@@ -54,7 +56,7 @@ last_string_count dw 0
 
 number_of_items dw 0
 item_code db 0
-              
+             
 ; intialize ds, es,ss to start of RAM
           mov       ax,0200h
           mov       ds,ax
@@ -83,11 +85,7 @@ item_code db 0
                call initialize_8259     
                                 
 		    call display_system_ready
-		    push si          ;;test
-		    lea si,ddd
-		    mov [si],'a'
-		    call display_char
-		    pop si
+		    
 		  
 		    get_mode:  
 		    
@@ -102,7 +100,16 @@ item_code db 0
 		    
 		     
              call initialize_LCD 
-		    call display_select_mode
+		    call display_select_mode 
+		    push si
+		    push ax
+		    lea si,ddd
+		     mov ax,number_of_items
+		    mov [si],al
+		    add [si],'0'
+		    call display_char
+		    pop ax
+		    pop si
             trans_program:
             
                 call get_input
@@ -151,32 +158,9 @@ item_code db 0
 		 
 		 
 
- cancel_key: 
+ lock_isr: 
  
-        lea si,ddd
-        mov [si],'a'
-             mov al,00000101b
-    out 02,al
-    ;call delay_30ms
-    mov al,[si]
-    out 00,al
-    
-    ;call delay_30ms
-    
-    mov al,00000100b
-    out 02,al 
-             
-            
-            call clear_display
-            
-            call delay_30ms
-            
-            
-            
-            ;mov al,00100000b
-            ;out 10,al 
- 
-            ;mov al,010
+        call buzzer_setup
  
  iret
  
@@ -572,16 +556,7 @@ display_select_mode proc
     cmp [si],'$'
     jnz sel_mode
     
-    push ax                ;;test
-    push si
-    mov ax,number_of_items
-    lea si,ddd
-    mov [si],al
-    add [si],'0'
-    call display_char
-    
-    pop si
-    pop ax    
+      
     
     pop si
     ret
@@ -830,7 +805,96 @@ initialize_data proc
     
     lea si,inter_mul 
     mov word ptr[si],0
-    mov word_ptr[si+2],0 
+    mov word_ptr[si+2],0   
+    
+    
+    
+    lea si,confirm_add
+
+     mov [si],'C'
+
+    mov [si+1],'o'
+    
+    
+    mov [si+2],'n'
+    
+    
+    mov [si+3],'f'
+    
+    
+    mov [si+4],'i'
+    
+    
+    mov [si+5],'r'
+   
+    
+    mov [si+6],'m'
+    
+    
+    mov [si+7],' '
+    
+   
+    mov [si+8],'a'
+    
+    
+    mov [si+9],'d'
+    
+    
+    mov [si+10],'d'
+    
+                      
+    mov [si+11],'?'
+    
+    mov [si+12],'$' 
+
+    lea si,confirm_delete
+
+     mov [si],'C'
+
+    mov [si+1],'o'
+    
+    
+    mov [si+2],'n'
+    
+    
+    mov [si+3],'f'
+    
+    
+    mov [si+4],'i'
+    
+    
+    mov [si+5],'r'
+   
+    
+    mov [si+6],'m'
+    
+    
+    mov [si+7],' '
+    
+   
+    mov [si+8],'d'
+    
+    
+    mov [si+9],'e'
+    
+    
+    mov [si+10],'l'
+    
+                      
+    mov [si+11],'e'
+    
+    mov [si+12],'t' 
+
+    mov [si+13],'e'
+    
+    
+    mov [si+14],'?'
+    
+    
+    mov [si+15],'$'
+    
+    
+    
     
     ret
     
@@ -1059,8 +1123,22 @@ program proc
         
         pop di
         
-        mov word ptr[di],ax
+        mov word ptr[di],ax 
         
+        call display_confirm_add
+        
+        get_add_confirmation:
+        call get_input
+        
+        cmp  dx,0dbc0h
+        jz confirmed_add
+        
+        cmp  dx,0d7c0h
+        jz return5
+        
+        jmp get_add_confirmation       
+        
+        confirmed_add:
         inc number_of_items
         
        
@@ -1083,7 +1161,21 @@ program proc
         call  input_item_number
         
         
+        call display_confirm_delete 
         
+        get_delete_confirmation:
+        call get_input
+        
+          cmp  dx,0dbc0h
+        jz confirmed_delete
+        
+        cmp  dx,0d7c0h
+        jz return5
+        
+        jmp get_delete_confirmation  
+        
+        
+        confirmed_delete:
         call clear_display
         
         call check_for_item_number 
@@ -1159,7 +1251,12 @@ input_item_number proc
     
     call get_input 
     
+    cmp dx,0bec0h
+    jnz check_item_no_backspace  
     
+    call clear_display
+    mov last_string_count,0
+    lea si,last_string
     check_item_no_backspace:
         cmp dx,0bf40h
         jnz  take
@@ -1209,9 +1306,29 @@ input_item_number proc
     look_for_enter:
         call get_input
         
+        cmp dx,0bec0h
+        jnz no_cancel
+        
+        
+        call clear_display
+    mov last_string_count,0
+    lea si,last_string 
+        
+        jmp inp
+        no_cancel:
+        cmp dx,0bf40h
+        jnz no_backspace
+        call backspace
+        jmp inp
+         
+         no_backspace:
+         
+         
         cmp dx,0bf80h
         jnz look_for_enter 
-    
+       
+       
+        
        pop dx
     
     ret
@@ -1325,19 +1442,11 @@ add_to_total proc   ;total_transaction +=  ax*bx
     
     mul bx
     
-    
-    add word ptr[di+ 2],ax
+    clc
+    adc word ptr[di+ 2],ax
     adc word ptr[di],dx 
     
-    push si
-    push bx            ;test
-    lea si,ddd
-    mov [si],'a' 
-    mov bx,  word ptr[di+2]
-    add [si],bl
-    call display_char
-    pop bx
-    pop si  
+      
     
     
     ret
@@ -1358,6 +1467,13 @@ get_price_or_quantity proc
    
     call get_input
     
+    cmp dx,0bec0h
+    jnz check_for_backspace
+    
+    call clear_display
+    mov last_string_count,0
+    lea si,last_string
+   check_for_backspace: 
     cmp dx,0bf40h
     jnz check_for_enter
     
@@ -1518,3 +1634,87 @@ show_last_string proc
 endp
 
 
+buzzer_setup proc   
+    mov al,00h
+    out 04,al
+    
+   mov al,01110101b
+   out 0eh,al
+   
+   mov al,11110001b
+   out 0eh,al  
+   
+   mov al,00110101b
+   
+   mov al,51h
+   out 08h,al
+   
+   mov al,12h
+   out 08h,al
+   
+   mov al,01h
+   out 0ah,al
+   
+   mov al,01h
+   out 0ah,al
+   
+   mov al,00h
+   out 0ch,al
+   
+   mov al,24h
+   out 0ch,al
+   
+   mov al,03h
+   out 04,al
+   
+   x200:
+    in al, 04h
+    and al,01000000b
+    jz x200 
+    
+    ret
+endp
+
+
+
+display_confirm_add proc
+     push si
+     call clear_display 
+      
+    call delay_30ms
+    
+    lea si,confirm_add
+    con_add:
+    call display_char 
+    inc si
+    cmp [si],'$'
+    jnz con_add
+    
+     
+    
+    pop si
+    
+    ret
+    
+endp 
+
+display_confirm_delete proc
+     push si
+     call clear_display 
+      
+    call delay_30ms
+    
+    lea si,confirm_delete
+    con_delete:
+    call display_char 
+    inc si
+    cmp [si],'$'
+    jnz con_delete
+    
+     
+    
+    pop si
+    
+    ret
+    
+endp   
