@@ -25,7 +25,8 @@
 
 
 ; add your code here
-         jmp     st1 
+         jmp     lock_isr 
+         
          db 509 dup(0)
 
          dw     lock_isr
@@ -42,13 +43,11 @@ confirm_delete db "Confirm delete?$"
 transact_confirm db "ENTER TRANSACTION MODE Y/N ?" ,'$' 
  
 decode_table dw 0ef80h,0ef40h,0eec0h,0edc0h,0ebc0h,0e7c0h,0df80h,0df40h,0dec0h,0ddc0h,0dbc0h,0d7c0h,0bf80h,0bf40h,0bec0h,0bdc0h,0bbc0h,0b7c0h,07f80h,07f40h,07ec0h,07dc0h,07bc0h,077c0h
- dummy dw 0
- mul_factor dw 0  
- dummy2 dw 0
+ 
  price_if_equal dw 0 
- ddd db 0
- aldummy db 0
- inter_mul dw 2 dup(0)
+ ddd db 0 
+ 
+ partial_transaction dw 2 dup(0)
  total_transaction dw 2 dup(0)
  
 last_string db 20 dup(0),'$'
@@ -101,15 +100,7 @@ item_code db 0
 		     
              call initialize_LCD 
 		    call display_select_mode 
-		    push si
-		    push ax
-		    lea si,ddd
-		     mov ax,number_of_items
-		    mov [si],al
-		    add [si],'0'
-		    call display_char
-		    pop ax
-		    pop si
+		    
             trans_program:
             
                 call get_input
@@ -124,7 +115,17 @@ item_code db 0
                 
                jmp trans_program
          
-            
+               
+               
+          lock_isr:          ;ISR_test
+              
+ 
+        call buzzer_setup
+ 
+ iret  
+ 
+ 
+ 
           
 	      transact: 
 	            
@@ -158,11 +159,7 @@ item_code db 0
 		 
 		 
 
- lock_isr: 
  
-        call buzzer_setup
- 
- iret
  
 
           
@@ -790,22 +787,17 @@ initialize_data proc
     lea si,number_of_items 
     mov word ptr[si],0 
     
-    lea si,dummy 
-    mov word ptr[si],0 
     
-    lea si,dummy2 
-    mov word ptr[si],0  
     
     lea si,total_transaction 
     mov word ptr[si],0
     mov word_ptr[si+2],0              
     
-    lea si,mul_factor 
-    mov word ptr[si],0  
-    
-    lea si,inter_mul 
+     
+     lea si,partial_transaction 
     mov word ptr[si],0
     mov word_ptr[si+2],0   
+    
     
     
     
@@ -950,7 +942,7 @@ transaction proc
   mov word ptr[si+2],0
   look_for_item_no_key: 
   
-    call clear_display
+                            ;;here
     
     
    total_or_itemno:
@@ -967,7 +959,7 @@ transaction proc
     
     jnz total_or_itemno
     
-    
+    call clear_display         ;;testing
     
     call initialize_LCD
     
@@ -1218,7 +1210,7 @@ backspace proc
     mov di,si        ;;Hold si value in order to resrore it before return from the method
     
     dec last_string_count
-    lea si, dummy
+    lea si, ddd
     
     mov [si],' '
     call display_char
@@ -1447,8 +1439,33 @@ add_to_total proc   ;total_transaction +=  ax*bx
     adc word ptr[di],dx 
     
       
+    lea di,partial_transaction
+    mov word ptr[di+ 2],ax
+    mov word ptr[di],dx 
+    
+    call clear_display
+    
+    call partial_convert_number_to_string
+     lea di,last_string 
+
+    lea si,last_string
+    add si,last_string_count
+    
+    cmp last_string_count,0
+    jz display_0
     
     
+    
+    print_total2:  
+        dec si
+       call display_char
+    
+        
+        cmp di,si
+        
+        jnz print_total2
+        
+     
     ret
     
 endp
@@ -1634,43 +1651,47 @@ show_last_string proc
 endp
 
 
-buzzer_setup proc   
-    mov al,00h
-    out 04,al
+buzzer_setup proc
     
-   mov al,01110101b
-   out 0eh,al
-   
-   mov al,11110001b
-   out 0eh,al  
-   
-   mov al,00110101b
-   
-   mov al,51h
-   out 08h,al
-   
-   mov al,12h
-   out 08h,al
-   
-   mov al,01h
-   out 0ah,al
-   
-   mov al,01h
-   out 0ah,al
-   
-   mov al,00h
-   out 0ch,al
-   
-   mov al,24h
-   out 0ch,al
-   
-   mov al,03h
-   out 04,al
-   
-   x200:
-    in al, 04h
-    and al,01000000b
-    jz x200 
+    mov al,00h
+    out 04h,al   
+    mov       al,00110110b
+		  out       0Eh,al
+		  
+		  mov al,01110100b
+		  out 0eh,al
+		  
+		  mov al,10110000b
+		  out  0eh,al
+		  
+		  mov       al,0e2h
+		  out       08h,al
+		  mov       al,04h
+		  out       08h,al 
+		  
+		  
+		  mov       al,50h
+		  out       0ah,al
+		  mov       al,00h
+		  out       0ah,al 
+		  
+		  mov       al,1h
+		  out       0ch,al
+		  mov       al,0h
+		  out       0ch,al
+		  
+		  
+		  mov al,03h
+		  out 04h,al
+		  
+		  x24:
+		    in al,04h
+		    and al,01000000b
+		    jz x24 
+		    
+		  mov al,00h
+    out 04h,al 
+    
     
     ret
 endp
@@ -1717,4 +1738,37 @@ display_confirm_delete proc
     
     ret
     
-endp   
+endp 
+
+partial_convert_number_to_string proc
+    push cx
+    push si 
+    push di
+    
+    lea bp,partial_transaction  
+    lea si,last_string
+    mov last_string_count,0
+    mov dx,[bp+0]
+    mov ax,[bp+2] 
+    
+
+    
+    mov cx,10
+    partial_divide2:
+    
+    div cx 
+    
+
+    mov [si],dx
+    add [si],'0'
+    inc si
+    inc last_string_count
+    mov dx,0
+    cmp ax,0
+    jnz partial_divide2
+    
+    pop di
+    pop si
+    pop cx
+    ret
+endp 
